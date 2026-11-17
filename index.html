@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Земельный налог по кадастровой оценке</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+   Статическая версия сервиса: одна страница, расчёт в браузере,
+   данные ГКО лежат рядом в каталоге data/ по одному файлу на
+   кадастровый район. Сервер и СУБД не нужны.
+
+   Оформление то же, что у основной версии: кадастровый план -
+   холодная бумага, тонкие графитовые линии, моноширинный шрифт для
+   номеров и сумм. Одна колонка шириной 46rem.
+*/
+:root {
+    --paper: #f0f2f1;
+    --card: #ffffff;
+    --ink: #14201e;
+    --ink-soft: #5c6866;
+    --ink-faint: #7f8b89;
+    --rule: #d2d8d6;
+    --rule-strong: #a9b3b1;
+    --survey: #17564f;
+    --survey-hover: #0f403a;
+    --survey-pale: #e4eeec;
+    --on-survey: #ffffff;
+    --rise: #9a3d24;
+    --rise-pale: #f6e8e3;
+    --fall: #2c6338;
+    --fall-pale: #e6efe7;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+    --gutter: 1.5rem;
+    --radius: 3px;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --paper: #121817;
+        --card: #1a2221;
+        --ink: #e3e9e7;
+        --ink-soft: #a3afac;
+        --ink-faint: #7d8987;
+        --rule: #2c3836;
+        --rule-strong: #47544f;
+        --survey: #6fc0b3;
+        --survey-hover: #8fd3c7;
+        --survey-pale: #1d302d;
+        --on-survey: #0d1a18;
+        --rise: #e39478;
+        --rise-pale: #33211b;
+        --fall: #86c494;
+        --fall-pale: #1c2c20;
+    }
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #121817;
+    --card: #1a2221;
+    --ink: #e3e9e7;
+    --ink-soft: #a3afac;
+    --ink-faint: #7d8987;
+    --rule: #2c3836;
+    --rule-strong: #47544f;
+    --survey: #6fc0b3;
+    --survey-hover: #8fd3c7;
+    --survey-pale: #1d302d;
+    --on-survey: #0d1a18;
+    --rise: #e39478;
+    --rise-pale: #33211b;
+    --fall: #86c494;
+    --fall-pale: #1c2c20;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 46rem; margin: 0 auto; padding: 0 var(--gutter); }
+[hidden] { display: none !important; }
+
+.masthead { border-bottom: 1px solid var(--rule); background: var(--card); }
+.masthead__inner {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 0.5rem 1.5rem; padding-block: 1.1rem;
+}
+.masthead__title { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
+.masthead__title a { color: inherit; text-decoration: none; }
+.masthead__sub {
+    margin: 0; font-family: var(--mono); font-size: 0.75rem; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+main { padding-block: 2.5rem 4rem; }
+h1 {
+    margin: 0 0 0.6rem; font-size: 1.85rem; font-weight: 600;
+    letter-spacing: -0.02em; line-height: 1.25; text-wrap: balance;
+}
+h2 { margin: 2.5rem 0 1rem; font-size: 1.05rem; font-weight: 600; text-wrap: balance; }
+.lede { margin: 0 0 2rem; max-width: 34rem; color: var(--ink-soft); }
+.eyebrow {
+    margin: 0 0 0.4rem; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.11em; color: var(--ink-faint);
+}
+.soft { margin: 0 0 0.75rem; font-size: 0.92rem; color: var(--ink-soft); }
+.card {
+    background: var(--card); border: 1px solid var(--rule);
+    border-radius: var(--radius); padding: 1.5rem;
+}
+.card + .card { margin-top: 1rem; }
+
+.field { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
+.input {
+    width: 100%; padding: 0.85rem 1rem; font-family: var(--mono); font-size: 1.25rem;
+    letter-spacing: 0.02em; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule-strong); border-radius: var(--radius);
+}
+.input--small { font-size: 1rem; padding: 0.6rem 0.8rem; }
+select.input { font-family: var(--sans); font-size: 0.95rem; padding: 0.6rem 0.8rem; }
+.input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--survey); outline-offset: 1px; background: var(--card);
+}
+.hint { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--ink-faint); }
+.button {
+    margin-top: 1rem; padding: 0.8rem 1.6rem; font-family: var(--sans); font-size: 0.95rem;
+    font-weight: 600; color: var(--on-survey); background: var(--survey);
+    border: 1px solid var(--survey); border-radius: var(--radius); cursor: pointer;
+    transition: background 0.15s ease;
+}
+.button:hover { background: var(--survey-hover); border-color: var(--survey-hover); }
+.button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.errors {
+    margin: 1rem 0 0; padding: 0.75rem 1rem; font-size: 0.9rem; color: var(--rise);
+    background: var(--rise-pale); border-left: 3px solid var(--rise);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+.examples { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; align-items: baseline; }
+.examples span { font-size: 0.85rem; color: var(--ink-faint); }
+.chip {
+    font-family: var(--mono); font-size: 0.82rem; color: var(--survey); background: var(--survey-pale);
+    border: 1px solid transparent; border-radius: var(--radius); padding: 0.25rem 0.6rem; cursor: pointer;
+}
+.chip:hover { border-color: var(--survey); }
+.chip:focus-visible { outline: 2px solid var(--survey); outline-offset: 1px; }
+
+.cadnum {
+    display: inline-flex; flex-wrap: wrap; align-items: flex-end; gap: 0.15rem;
+    font-family: var(--mono); font-size: 1.4rem; font-weight: 500;
+}
+.cadnum__seg { display: flex; flex-direction: column; align-items: center; }
+.cadnum__label {
+    font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 0.15rem;
+}
+.cadnum__sep { color: var(--rule-strong); padding-bottom: 0.05rem; }
+
+.compare {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;
+}
+.figure__label {
+    margin: 0 0 0.35rem; font-family: var(--mono); font-size: 0.7rem;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint);
+}
+.figure__value {
+    font-family: var(--mono); font-size: 1.9rem; font-weight: 500;
+    letter-spacing: -0.01em; line-height: 1.15; font-variant-numeric: tabular-nums;
+}
+.figure__note { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--ink-faint); }
+.compare__arrow { font-size: 1.4rem; color: var(--rule-strong); }
+.value--rise { color: var(--rise); }
+.value--fall { color: var(--fall); }
+.value--none { color: var(--ink-faint); }
+.delta {
+    display: inline-block; margin-top: 1.25rem; padding: 0.3rem 0.7rem;
+    font-family: var(--mono); font-size: 0.85rem; border-radius: var(--radius);
+}
+.delta--rise { color: var(--rise); background: var(--rise-pale); }
+.delta--fall { color: var(--fall); background: var(--fall-pale); }
+
+.steps { position: relative; margin-top: 1.75rem; padding-top: 2.25rem; }
+.steps__ceiling { position: absolute; inset-inline: 0; top: 1.6rem; border-top: 1px dashed var(--rise); }
+.steps__ceiling-label {
+    position: absolute; top: -1.45rem; right: 0; font-family: var(--mono);
+    font-size: 0.72rem; color: var(--rise);
+}
+.steps__grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); align-items: end; gap: 0.6rem; height: 11rem;
+}
+.step { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; text-align: center; }
+.step__amount {
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 500;
+    margin-bottom: 0.3rem; white-space: nowrap;
+}
+.step__bar { background: var(--survey); border-radius: var(--radius) var(--radius) 0 0; min-height: 4px; }
+.step__year { margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--ink-soft); }
+.step__capped { font-size: 0.65rem; color: var(--ink-faint); }
+
+.facts { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.facts th, .facts td {
+    padding: 0.6rem 0; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top;
+}
+.facts th { font-weight: 400; color: var(--ink-soft); width: 46%; padding-right: 1rem; }
+.facts td { font-family: var(--mono); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.facts td.prose { font-family: var(--sans); }
+.facts tr:last-child th, .facts tr:last-child td { border-bottom: 0; }
+.facts small { font-family: var(--sans); color: var(--ink-faint); font-size: 0.8rem; }
+.law { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-faint); }
+
+.notice {
+    margin: 1.25rem 0 0; padding: 0.9rem 1.1rem; font-size: 0.88rem; background: var(--survey-pale);
+    border-left: 3px solid var(--survey); border-radius: 0 var(--radius) var(--radius) 0;
+}
+.notice--warn { background: var(--rise-pale); border-left-color: var(--rise); }
+.notice p { margin: 0; }
+.notice p + p { margin-top: 0.5rem; }
+
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.25rem; }
+.options label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; }
+.options .wide { grid-column: 1 / -1; }
+.check { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.9rem; }
+.check input { margin-top: 0.3rem; width: 1rem; height: 1rem; accent-color: var(--survey); }
+.check small { display: block; color: var(--ink-faint); font-size: 0.8rem; }
+
+.links { margin: 0; padding: 0; list-style: none; }
+.links li + li { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); }
+.links a, .more {
+    font-weight: 600; color: var(--survey); text-decoration: none;
+    border-bottom: 1px solid var(--survey-pale);
+}
+.links a:hover, .more:hover { border-bottom-color: var(--survey); }
+.links p { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--ink-soft); }
+
+.route { margin: 0; padding: 0; list-style: none; counter-reset: route; }
+.route li { position: relative; padding-left: 2.4rem; padding-bottom: 1.4rem; counter-increment: route; }
+.route li::before {
+    content: counter(route); position: absolute; left: 0; top: 0.1rem; width: 1.6rem; height: 1.6rem;
+    display: grid; place-items: center; font-family: var(--mono); font-size: 0.8rem;
+    color: var(--survey); background: var(--survey-pale); border-radius: 50%;
+}
+.route li:not(:last-child)::after {
+    content: ""; position: absolute; left: 0.78rem; top: 1.9rem; bottom: 0.3rem;
+    border-left: 1px solid var(--rule);
+}
+.route strong { display: block; font-size: 0.95rem; }
+.route p { margin: 0.2rem 0 0; font-size: 0.88rem; color: var(--ink-soft); }
+
+.footer {
+    margin-top: 3rem; padding-block: 1.5rem 2.5rem; border-top: 1px solid var(--rule);
+    font-size: 0.82rem; color: var(--ink-faint);
+}
+.footer p { margin: 0 0 0.5rem; }
+.back {
+    display: inline-block; margin-bottom: 1.5rem; font-size: 0.88rem; color: var(--ink-soft);
+    text-decoration: none; background: none; border: 0; padding: 0; cursor: pointer; font-family: var(--sans);
+}
+.back:hover { color: var(--survey); }
+.back:focus-visible { outline: 2px solid var(--survey); outline-offset: 2px; }
+
+@media (max-width: 34rem) {
+    .compare { grid-template-columns: 1fr; gap: 1.25rem; }
+    .compare__arrow { transform: rotate(90deg); justify-self: start; }
+    .cadnum { font-size: 1.05rem; }
+    .figure__value { font-size: 1.6rem; }
+    .steps__grid { height: 9rem; gap: 0.35rem; }
+    .step__amount { font-size: 0.68rem; }
+    .options { grid-template-columns: 1fr; }
+    .facts th { width: 50%; }
+    .card { padding: 1.1rem; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap masthead__inner">
+    <p class="masthead__title"><a href="#" id="home-link">Земельный налог по данным кадастровой оценки</a></p>
+    <p class="masthead__sub">Саратовская область</p>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- ================= Поиск ================= -->
+    <section id="view-search">
+      <h1>Узнайте, как изменится налог за ваш участок</h1>
+      <p class="lede">
+        Введите кадастровый номер. Сервис сравнит кадастровую стоимость по действующему
+        и по новому туру государственной кадастровой оценки и покажет, что будет с налогом
+        в ближайшие четыре года.
+      </p>
+
+      <div class="card">
+        <form id="search-form" novalidate>
+          <label class="field" for="cadnum-input">Кадастровый номер участка</label>
+          <input class="input" id="cadnum-input" type="text" maxlength="60" autocomplete="off"
+                 inputmode="text" spellcheck="false" placeholder="64:32:024013:790">
+          <p class="hint">Номер указан в выписке ЕГРН и в налоговом уведомлении. Ведущие нули можно не набирать.</p>
+          <div class="errors" id="search-error" hidden></div>
+          <button class="button" type="submit" id="search-button">Рассчитать налог</button>
+        </form>
+        <div class="examples">
+          <span>Примеры:</span>
+          <button class="chip" type="button" data-example="64:32:024013:790">64:32:024013:790</button>
+          <button class="chip" type="button" data-example="64:38:070203:189">64:38:070203:189</button>
+          <button class="chip" type="button" data-example="64:48:010111:207">64:48:010111:207</button>
+        </div>
+      </div>
+
+      <h2>Данные в системе</h2>
+      <div class="card">
+        <table class="facts">
+          <tr><th>Действующая оценка</th><td>ГКО 2019 — налог за 2020 год</td></tr>
+          <tr><th>Новая оценка</th><td>ГКО 2022 — применяется с 2023 года</td></tr>
+          <tr><th>Земельных участков</th><td id="meta-parcels">908 595</td></tr>
+          <tr><th>Из них в обоих турах</th><td id="meta-both">232 146</td></tr>
+        </table>
+      </div>
+
+      <h2>Если вы не согласны со стоимостью</h2>
+      <div class="card">
+        <p style="margin:0 0 0.75rem">Кадастровую стоимость можно оспорить. Порядок обращения и сроки собраны в отдельном разделе.</p>
+        <a class="more" href="#appeal">Как оспорить кадастровую стоимость →</a>
+      </div>
+    </section>
+
+    <!-- ================= Результат ================= -->
+    <section id="view-result" hidden>
+      <button class="back" type="button" id="back-button">← Другой участок</button>
+      <div id="result-body"></div>
+    </section>
+
+    <!-- ================= Оспаривание ================= -->
+    <section id="view-appeal" hidden>
+      <a class="back" href="#">← К расчёту налога</a>
+
+      <h1>Как оспорить кадастровую стоимость</h1>
+      <p class="lede">
+        Кадастровая стоимость определяется массовым методом: оценщик не выезжает на участок
+        и не учитывает его индивидуальные особенности. Поэтому она может оказаться заметно
+        выше рыночной. Закон предусматривает два самостоятельных механизма пересмотра.
+      </p>
+
+      <h2>Два пути пересмотра</h2>
+      <div class="card">
+        <table class="facts">
+          <tr>
+            <th>Исправление ошибки<br><span class="law">ст. 21 ФЗ № 237-ФЗ</span></th>
+            <td class="prose">Если при оценке использованы неверные сведения: не та площадь, не тот вид разрешённого использования, не та категория земель. Обращение бесплатное, отчёт оценщика не нужен.</td>
+          </tr>
+          <tr>
+            <th>Установление стоимости в размере рыночной<br><span class="law">ст. 22.1 ФЗ № 237-ФЗ</span></th>
+            <td class="prose">Если сведения верны, но стоимость выше рыночной. Потребуется отчёт независимого оценщика об оценке рыночной стоимости на дату определения кадастровой.</td>
+          </tr>
+        </table>
+      </div>
+
+      <h2>Порядок действий</h2>
+      <div class="card">
+        <ul class="route">
+          <li><strong>Получите выписку о кадастровой стоимости</strong>
+            <p>Выписка из ЕГРН подтверждает действующее значение и дату его определения. Предоставляется Росреестром бесплатно.</p></li>
+          <li><strong>Запросите разъяснения у бюджетного учреждения</strong>
+            <p>ГБУ, проводившее оценку, обязано разъяснить, как определялась стоимость вашего участка. Из ответа видно, какие характеристики использовались и нет ли среди них ошибочных.</p></li>
+          <li><strong>Подайте заявление об исправлении ошибки</strong>
+            <p>Если в характеристиках нашлась ошибка — это самый короткий путь. Заявление подаётся в ГБУ, госпошлина не взимается.</p></li>
+          <li><strong>Закажите отчёт об оценке рыночной стоимости</strong>
+            <p>Нужен, если характеристики верны, а стоимость всё равно завышена. Отчёт готовит независимый оценщик — член саморегулируемой организации.</p></li>
+          <li><strong>Подайте заявление об установлении стоимости в размере рыночной</strong>
+            <p>Подаётся в ГБУ с приложением отчёта. Решение учреждения при несогласии обжалуется в суде.</p></li>
+        </ul>
+        <div class="notice">
+          <p>Сроки подачи ограничены и зависят от даты применения оспариваемой стоимости.
+             Уточните действующие сроки перед обращением — пропущенный срок восстановить сложно.</p>
+        </div>
+      </div>
+
+      <h2>Куда обращаться и что почитать</h2>
+      <div id="appeal-links"></div>
+
+      <div class="notice notice--warn">
+        <p>Материал носит справочный характер и не является юридической консультацией.
+           Порядок и сроки пересмотра периодически меняются — проверяйте действующую
+           редакцию Федерального закона № 237-ФЗ.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>Расчёт носит справочный характер и не является налоговым уведомлением. Начисленные суммы публикует ФНС России.</p>
+    <p>Применяемая кадастровая стоимость может отличаться от значения в выгрузке, если она изменялась по решению комиссии или суда.</p>
+    <p>Статическая версия: поиск и расчёт выполняются в браузере, данные государственной кадастровой оценки 2019 и 2022 годов загружаются по кадастровым районам.</p>
+  </div>
+</footer>
+
+<!-- =====================================================================
+     Расчётный модуль. Не обращается к странице: только арифметика.
+     Перенос valuation/taxes.py и valuation/cadastral.py основной версии.
+     Деньги считаются в целых копейках (BigInt), дробных чисел нет.
+     ===================================================================== -->
+<script id="calc">
+const Calc = (() => {
+  "use strict";
+
+  const GROUPS = ["residential", "garden", "agricultural", "preferential", "general"];
+  const UNKNOWN_GROUP = 5;
+  // Предельные ставки по п. 1 ст. 394 НК РФ, в десятитысячных долях процента.
+  const RATE_CEILING = { residential: 3000n, garden: 3000n, agricultural: 3000n,
+                         preferential: 3000n, general: 15000n };
+  const DEDUCTION_AREA_C = 60000n;   // 600 кв.м, п. 5 ст. 391 НК РФ
+  const HORIZON_YEARS = 4;
+
+  // --- округление -------------------------------------------------------
+  // До полного рубля: 50 копеек и более округляются вверх (п. 6 ст. 52 НК РФ).
+  function divHalfUp(n, d) { return (2n * n + d) / (2n * d); }
+  // Банковское округление: так квантует Decimal в основной версии.
+  function divHalfEven(n, d) {
+    const q = n / d, r2 = 2n * (n % d);
+    if (r2 > d) return q + 1n;
+    if (r2 < d) return q;
+    return q % 2n === 0n ? q : q + 1n;
+  }
+
+  // --- кадастровый номер -------------------------------------------------
+  const INVISIBLE = /[    ​﻿\t\r\n ]/g;
+
+  function parseNumber(raw) {
+    if (raw === null || raw === undefined) return { error: "empty" };
+    let text = String(raw).trim().replace(/^['’`]+/, "").replace(INVISIBLE, "")
+      .replace(/[;\-\/\\]/g, ":");
+    if (!text) return { error: "empty" };
+    const parts = text.split(":");
+    if (parts.length !== 4) return { error: parts.length === 3 ? "quarter" : "format" };
+    if (!parts.every(p => /^\d+$/.test(p))) return { error: "format" };
+    const canon = parts.map(p => String(BigInt(p)));
+    if (!/^\d{1,2}:\d{1,2}:\d{1,7}:\d{1,10}$/.test(canon.join(":"))) return { error: "format" };
+    const pad = s => s.padStart(2, "0");
+    return {
+      canonical: canon.join(":"),
+      okrug: pad(canon[0]), rayon: pad(canon[1]),
+      kvartal: parts[2].length >= 6 ? parts[2] : canon[2],
+      obj: canon[3],
+      region: Number(canon[0]), district: Number(canon[1]),
+      quarter: canon[2], object: Number(canon[3]),
+    };
+  }
+
+  // --- разбор чисел из полей ввода ---------------------------------------
+  // "0,3" -> 3000n (десятитысячные доли процента); null, если не число.
+  function parseRate(text) {
+    const m = /^(\d{1,3})(?:[.,](\d{1,4}))?$/.exec(String(text).trim());
+    if (!m) return null;
+    return BigInt(m[1]) * 10000n + BigInt((m[2] || "").padEnd(4, "0"));
+  }
+  // "516 440,50" -> 51644050n копеек; null, если не число.
+  function parseMoney(text) {
+    const clean = String(text).replace(INVISIBLE, "").replace(",", ".");
+    const m = /^(\d{1,16})(?:\.(\d{1,2}))?$/.exec(clean);
+    if (!m) return null;
+    return BigInt(m[1]) * 100n + BigInt((m[2] || "").padEnd(2, "0"));
+  }
+
+  // --- расчёт налога ------------------------------------------------------
+  // input: valueKop, rateE4, areaC (кв.м x 100, 0n если неизвестна),
+  //        shareNum/shareDen, months, deduction (bool), prevTax (рубли | null)
+  function calculate(input) {
+    const notes = [];
+    const value = input.valueKop;
+    let deduction = 0n;
+
+    if (input.deduction) {
+      if (!input.areaC || input.areaC <= 0n) {
+        notes.push("Вычет не применён: площадь участка неизвестна. Укажите её в уточнениях расчёта.");
+      } else {
+        const deductible = input.areaC < DEDUCTION_AREA_C ? input.areaC : DEDUCTION_AREA_C;
+        deduction = divHalfEven(value * deductible, input.areaC);
+        if (deductible >= input.areaC) {
+          notes.push("Площадь участка не превышает 600 кв.м: налоговая база равна нулю.");
+        }
+      }
+    }
+
+    const base = value > deduction ? value - deduction : 0n;
+    const months = BigInt(Math.max(0, Math.min(12, input.months ?? 12)));
+    const shareNum = input.shareNum ?? 1n, shareDen = input.shareDen ?? 1n;
+
+    // ставка: rateE4 / 10^6; коэффициент владения: months / 12
+    const taxKop = divHalfEven(base * input.rateE4 * shareNum * months,
+                               1000000n * shareDen * 12n);
+    const taxFull = divHalfUp(taxKop, 100n);
+
+    let payable = taxFull, limited = false;
+    if (input.prevTax !== null && input.prevTax !== undefined && input.prevTax > 0n) {
+      const limit = divHalfUp(input.prevTax * 11n, 10n);      // п. 17 ст. 396 НК РФ
+      if (taxFull > limit) {
+        payable = limit; limited = true;
+        notes.push("Применено ограничение роста: сумма налога не может увеличиться более "
+          + "чем на 10 % к предыдущему периоду (п. 17 ст. 396 НК РФ).");
+      }
+    }
+    return { base, deduction, taxFull, payable, limited, notes };
+  }
+
+  // Траектория по годам действия нового тура оценки.
+  function project(baseTax, targetTax, firstYear, years = HORIZON_YEARS) {
+    const out = [];
+    let previous = baseTax;
+    for (let i = 0; i < years; i++) {
+      let payable = targetTax, limited = false;
+      if (previous > 0n) {
+        const limit = divHalfUp(previous * 11n, 10n);
+        limited = targetTax > limit;
+        payable = limited ? limit : targetTax;
+      }
+      out.push({ year: firstYear + i, payable, full: targetTax, limited });
+      previous = payable;
+    }
+    return out;
+  }
+
+  // Сопоставление экономии на налоге с издержками оспаривания.
+  function estimateAppeal(input, marketKop, reportKop, horizon = HORIZON_YEARS) {
+    const opts = { ...input, prevTax: null };
+    const current = calculate(opts);
+    const reduced = calculate({ ...opts, valueKop: marketKop });
+    const annual = current.payable - reduced.payable;           // рубли
+    const total = annual * BigInt(horizon);
+    const netKop = total * 100n - reportKop;
+    const paybackTenths = annual > 0n ? divHalfEven(reportKop * 10n, annual * 100n) : null;
+    return { annual, total, reportKop, netKop, paybackTenths,
+             worthwhile: netKop > 0n, horizon };
+  }
+
+  // Ставка для участка: выбор пользователя -> группа из данных оценки ->
+  // предельная ставка. Повторяет views._rate_for основной версии.
+  function rateFor(rates, district, groupIndex, taxYear, chosenGroup) {
+    let group;
+    if (chosenGroup) group = chosenGroup;
+    else if (groupIndex >= 0 && groupIndex < GROUPS.length) group = GROUPS[groupIndex];
+    else return { rateE4: 15000n, group: "general", unknown: true,
+                  source: "вид использования не указан в выгрузке" };
+
+    const entry = rates && rates.districts[String(district)];
+    const found = entry && entry.r[String(taxYear)] && entry.r[String(taxYear)][group];
+    if (found) {
+      return { rateE4: parseRate(found[0]), group, unknown: false, municipality: entry.m,
+               source: rates.sources[found[1]] || "решение муниципального образования" };
+    }
+    return { rateE4: RATE_CEILING[group] ?? 15000n, group, unknown: false, ceiling: true,
+             source: "предельная ставка по НК РФ" };
+  }
+
+  // Поиск записи об участке в файле района.
+  function findParcel(districtData, quarter, object) {
+    const rows = districtData && districtData[quarter];
+    if (!rows) return null;
+    let lo = 0, hi = rows.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, o = rows[mid][0];
+      if (o === object) {
+        const r = rows[mid];
+        return { newKop: BigInt(r[1]), oldKop: BigInt(r[2]), areaC: BigInt(r[3]),
+                 segment: r[4], group: r[5] };
+      }
+      if (o < object) lo = mid + 1; else hi = mid - 1;
+    }
+    return null;
+  }
+
+  return { GROUPS, UNKNOWN_GROUP, HORIZON_YEARS, parseNumber, parseRate, parseMoney,
+           calculate, project, estimateAppeal, rateFor, findParcel, divHalfEven };
+})();
+</script>
+
+<script>
+(() => {
+  "use strict";
+
+  const TOUR_OLD = { year: 2019, appliesFrom: 2020 };
+  const TOUR_NEW = { year: 2022, appliesFrom: 2023 };
+  const REGION = 64;
+
+  const SEGMENTS = {
+    1: "сельскохозяйственное производство", 2: "жилая застройка",
+    3: "общественное использование", 4: "предпринимательство", 5: "отдых и рекреация",
+    6: "сельскохозяйственное использование", 7: "транспорт, гаражи, автостоянки",
+    8: "оборона и безопасность", 9: "использование природных территорий",
+    10: "использование лесов", 11: "водные объекты", 12: "специальная деятельность",
+    13: "садоводство и огородничество", 14: "земли запаса",
+  };
+  const SEGMENT_GROUP = { 1: "agricultural", 2: "residential", 3: "general", 4: "general", 5: "general",
+    6: "agricultural", 7: "general", 8: "preferential", 9: "general", 10: "general", 11: "general",
+    12: "general", 13: "garden", 14: "general" };
+  const GROUP_LABELS = {
+    residential: "жилой фонд, ИЖС", garden: "ЛПХ, садоводство, огородничество",
+    agricultural: "сельскохозяйственное использование",
+    preferential: "оборона и безопасность", general: "прочие земельные участки",
+  };
+  const LEGAL_LINKS = [
+    { group: "Куда обращаться", items: [
+      { title: "ГБУ Саратовской области «Центр государственной кадастровой оценки» (ГБУ СО «Госкадастроценка»)",
+        note: "Заявление об исправлении ошибок, допущенных при определении кадастровой стоимости (ст. 21), и заявление об установлении стоимости в размере рыночной (ст. 22.1)",
+        url: "https://cgko64.ru/" },
+      { title: "Росреестр", note: "Сведения ЕГРН, выписка о кадастровой стоимости, порядок обращения",
+        url: "https://rosreestr.gov.ru/" },
+      { title: "ФНС России — личный кабинет налогоплательщика",
+        note: "Начисленные суммы налога и льготы по вашим объектам", url: "https://lkfl2.nalog.ru/" },
+      { title: "ФНС России — ставки и льготы по имущественным налогам",
+        note: "Фактическая ставка земельного налога в вашем муниципальном образовании",
+        url: "https://www.nalog.gov.ru/rn64/service/tax/" },
+    ] },
+    { group: "Правовые основания", items: [
+      { title: "Федеральный закон № 237-ФЗ «О государственной кадастровой оценке»",
+        note: "Статья 21 — исправление ошибок, статья 22.1 — установление стоимости в размере рыночной",
+        url: "https://www.consultant.ru/" },
+      { title: "Налоговый кодекс РФ, глава 31 «Земельный налог»",
+        note: "Статья 391 — налоговая база и вычет, статья 394 — ставки, статья 396 — порядок исчисления",
+        url: "https://www.garant.ru/" },
+    ] },
+  ];
+
+  // ---------- вспомогательное ----------
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const groupDigits = s => s.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const rub = n => (n < 0n ? "−" : "") + groupDigits(String(n < 0n ? -n : n)) + " ₽";
+  const kop = n => {
+    const s = String(n).padStart(3, "0");
+    return groupDigits(s.slice(0, -2)) + "," + s.slice(-2) + " ₽";
+  };
+  const rateText = e4 => {
+    const s = String(e4).padStart(5, "0");
+    return s.slice(0, -4) + "," + s.slice(-4) + " %";
+  };
+  const areaText = c => {
+    const whole = c / 100n, frac = c % 100n;
+    return groupDigits(String(whole)) + (frac ? "," + String(frac).padStart(2, "0").replace(/0$/, "") : "") + " кв.м";
+  };
+  function pluralYears(n) {
+    if (n % 100 >= 11 && n % 100 <= 14) return "лет";
+    const last = n % 10;
+    return last === 1 ? "год" : last >= 2 && last <= 4 ? "года" : "лет";
+  }
+
+  // ---------- загрузка данных ----------
+  const cache = new Map();
+  let ratesPromise = null;
+
+  function loadJson(path) {
+    return fetch(path).then(r => {
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function loadDistrict(d) {
+    if (!cache.has(d)) {
+      cache.set(d, loadJson("data/" + d + ".json").catch(err => { cache.delete(d); throw err; }));
+    }
+    return cache.get(d);
+  }
+  function loadRates() {
+    if (!ratesPromise) ratesPromise = loadJson("data/rates.json").catch(() => { ratesPromise = null; return null; });
+    return ratesPromise;
+  }
+
+  // ---------- состояние ----------
+  const state = { number: null, parcel: null, rates: null, options: null };
+  const defaultOptions = () => ({
+    group: "", customRate: "", deduction: false, share: "1", months: 12,
+    area: "", market: "", report: "20000",
+  });
+  const SHARES = { "1": [1n, 1n], "0.5": [1n, 2n], "0.3333333333": [3333333333n, 10000000000n], "0.25": [1n, 4n] };
+
+  // ---------- переключение разделов ----------
+  function show(view) {
+    for (const v of ["search", "result", "appeal"]) $("view-" + v).hidden = v !== view;
+    window.scrollTo(0, 0);
+  }
+  function route() {
+    if (location.hash === "#appeal") show("appeal");
+    else show(state.number ? "result" : "search");
+  }
+
+  // ---------- поиск ----------
+  const ERRORS = {
+    empty: "Введите кадастровый номер участка.",
+    quarter: "Это номер кадастрового квартала: в нём три группы цифр. У участка их четыре, например 64:32:024013:790.",
+    format: "Номер записывается четырьмя группами цифр через двоеточие, например 64:32:024013:790. Проверьте запись в выписке ЕГРН.",
+  };
+
+  async function search(raw) {
+    const errorBox = $("search-error");
+    errorBox.hidden = true;
+    const number = Calc.parseNumber(raw);
+    if (number.error) {
+      errorBox.textContent = ERRORS[number.error];
+      errorBox.hidden = false;
+      return;
+    }
+    const button = $("search-button");
+    button.disabled = true;
+    button.textContent = "Загружаю данные района…";
+    try {
+      let parcel = null;
+      if (number.region === REGION) {
+        const [district, rates] = await Promise.all([loadDistrict(number.district), loadRates()]);
+        state.rates = rates;
+        parcel = Calc.findParcel(district, number.quarter, number.object);
+      }
+      state.number = number;
+      state.parcel = parcel;
+      state.options = defaultOptions();
+      try { history.replaceState(null, "", "?n=" + encodeURIComponent(number.canonical)); } catch (e) { /* в песочнице адрес не меняется */ }
+      if (location.hash) { try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {} }
+      render();
+      show("result");
+    } catch (err) {
+      errorBox.textContent = "Не удалось загрузить данные района. Проверьте подключение к интернету и повторите запрос.";
+      errorBox.hidden = false;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Рассчитать налог";
+    }
+  }
+
+  // ---------- расчёт по текущим уточнениям ----------
+  function compute() {
+    const { number, parcel, options, rates } = state;
+    const hasOld = parcel.oldKop > 0n, hasNew = parcel.newKop > 0n;
+
+    const manualArea = Calc.parseMoney(options.area);
+    const areaC = parcel.areaC > 0n ? parcel.areaC : (manualArea || 0n);
+    const [shareNum, shareDen] = SHARES[options.share] || SHARES["1"];
+    const common = { areaC, shareNum, shareDen, months: options.months, deduction: options.deduction };
+
+    const custom = options.customRate ? Calc.parseRate(options.customRate) : null;
+    const pick = year => {
+      const r = Calc.rateFor(rates, number.district, parcel.group, year, options.group);
+      return custom !== null ? { ...r, rateE4: custom, unknown: false, ceiling: false, custom: true,
+                                 source: "ставка указана вами" } : r;
+    };
+    const rateNow = pick(TOUR_OLD.appliesFrom), rateNext = pick(TOUR_NEW.appliesFrom);
+
+    const now = hasOld ? Calc.calculate({ ...common, valueKop: parcel.oldKop, rateE4: rateNow.rateE4, prevTax: null }) : null;
+    const nextInput = { ...common, valueKop: parcel.newKop, rateE4: rateNext.rateE4 };
+    const next = hasNew ? Calc.calculate({ ...nextInput, prevTax: now ? now.payable : null }) : null;
+
+    let trajectory = null, difference = null, percentTenths = null;
+    if (now && next) {
+      difference = next.payable - now.payable;
+      if (now.payable > 0n) {
+        const abs = difference < 0n ? -difference : difference;
+        percentTenths = Calc.divHalfEven(abs * 1000n, now.payable) * (difference < 0n ? -1n : 1n);
+      }
+      trajectory = Calc.project(now.payable, next.taxFull, TOUR_NEW.appliesFrom);
+    }
+
+    let appeal = null;
+    const market = Calc.parseMoney(options.market);
+    if (next && market !== null && market > 0n) {
+      const report = Calc.parseMoney(options.report);
+      appeal = Calc.estimateAppeal(nextInput, market, report === null ? 2000000n : report);
+      appeal.marketKop = market;
+    }
+    return { hasOld, hasNew, areaC, rateNow, rateNext, now, next, trajectory, difference,
+             percentTenths, appeal, customInvalid: !!options.customRate && custom === null };
+  }
+
+  // ---------- вывод ----------
+  function cadnumHtml(n) {
+    const seg = (label, value) => `<span class="cadnum__seg"><span class="cadnum__label">${label}</span>${esc(value)}</span>`;
+    const sep = '<span class="cadnum__sep">:</span>';
+    return `<p class="eyebrow">Кадастровый номер</p><div class="cadnum">${
+      [seg("округ", n.okrug), seg("район", n.rayon), seg("квартал", n.kvartal), seg("участок", n.obj)].join(sep)}</div>`;
+  }
+  function linksHtml(groups) {
+    return groups.map(g => g.items.map(i =>
+      `<li><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a><p>${esc(i.note)}</p></li>`).join("")).join("");
+  }
+
+  function render() {
+    const { number, parcel } = state;
+    const body = $("result-body");
+    let html = cadnumHtml(number);
+
+    if (!parcel) {
+      const foreign = number.region !== REGION
+        ? `<p>Номер начинается с ${esc(number.okrug)} — это другой кадастровый округ. Сервис содержит только земельные участки Саратовской области: их номера начинаются с 64.</p>`
+        : `<p>Так бывает, если номер набран с опечаткой или если это объект капитального строительства — здание, помещение или машино-место. Сервис работает только с земельными участками Саратовской области.</p>`;
+      html += `<h1 style="margin-top:1.5rem">Участок не найден</h1>
+        <div class="notice notice--warn"><p>В загруженных выгрузках нет участка с номером ${esc(number.canonical)}.</p>${foreign}</div>
+        <p style="margin-top:1.5rem">Проверить номер можно в выписке ЕГРН или на публичной кадастровой карте Росреестра.</p>`;
+      body.innerHTML = html;
+      return;
+    }
+
+    const c = compute();
+
+    if (c.hasOld && !c.hasNew) {
+      html += `<h1 style="margin-top:1.5rem">Участок есть только в действующей оценке</h1>
+        <div class="notice notice--warn">
+          <p>Участок ${esc(number.canonical)} присутствует в туре ${TOUR_OLD.year} года, но отсутствует в туре ${TOUR_NEW.year} года.
+             Обычно это значит, что он снят с учёта, объединён с соседним или разделён на несколько новых.</p>
+          <p>Рассчитать налог на будущие периоды по нему нельзя. Актуальный состав объектов можно проверить в выписке ЕГРН.</p>
+        </div>
+        <h2>Действующая оценка</h2>
+        <div class="card"><table class="facts">
+          <tr><th>Кадастровая стоимость</th><td>${kop(parcel.oldKop)}</td></tr>
+          ${parcel.areaC > 0n ? `<tr><th>Площадь</th><td>${areaText(parcel.areaC)}</td></tr>` : ""}
+        </table></div>`;
+      body.innerHTML = html;
+      return;
+    }
+
+    const rising = c.difference !== null && c.difference > 0n;
+    const falling = c.difference !== null && c.difference < 0n;
+
+    if (!c.hasOld) {
+      html += `<h1 style="margin-top:1.5rem">Налог за участок</h1>
+        <div class="notice"><p>В выгрузке тура ${TOUR_OLD.year} года сведений об участке нет: тот тур охватывал только земли вне населённых пунктов.
+          Сравнить с предыдущим периодом не с чем, ограничение роста не применяется, поэтому показан расчёт по стоимости ${TOUR_NEW.year} года.</p></div>`;
+    } else {
+      html += `<h1 style="margin-top:1.5rem">${rising ? "Налог вырастет" : falling ? "Налог снизится" : "Налог не изменится"}</h1>`;
+    }
+
+    // --- сравнение сумм ---
+    html += `<div class="card"><div class="compare"><div>${
+      c.now ? `<p class="figure__label">Сейчас платите</p><div class="figure__value">${rub(c.now.payable)}</div>
+               <p class="figure__note">за ${TOUR_OLD.appliesFrom} год</p>`
+            : `<p class="figure__label">Ранее</p><div class="figure__value value--none">—</div>
+               <p class="figure__note">сведений об оценке нет</p>`
+      }</div><div class="compare__arrow" aria-hidden="true">→</div><div>
+        <p class="figure__label">Станет в ${TOUR_NEW.appliesFrom} году</p>
+        <div class="figure__value ${rising ? "value--rise" : falling ? "value--fall" : ""}">${rub(c.next.payable)}</div>
+        ${c.next.limited ? '<p class="figure__note">с учётом ограничения роста</p>' : ""}
+      </div></div>`;
+    if (rising || falling) {
+      const sign = rising ? "+" : "";
+      let pct = "";
+      if (c.percentTenths !== null) {
+        const a = c.percentTenths < 0n ? -c.percentTenths : c.percentTenths;
+        pct = ` · ${rising ? "+" : "−"}${a / 10n},${a % 10n} %`;
+      }
+      html += `<span class="delta ${rising ? "delta--rise" : "delta--fall"}">${sign}${rub(c.difference)}${pct}</span>`;
+    }
+    html += "</div>";
+
+    // --- траектория ---
+    if (c.trajectory) {
+      let ceiling = c.next.taxFull;
+      for (const p of c.trajectory) if (p.payable > ceiling) ceiling = p.payable;
+      if (ceiling > 0n) {
+        const reached = !c.trajectory[c.trajectory.length - 1].limited;
+        html += `<h2>Что вы заплатите по годам</h2><div class="card">
+          <p class="soft" style="margin-bottom:0.25rem">Сумма налога не может вырасти более чем на 10 % к предыдущему году
+            (п. 17 ст. 396 НК РФ). Поэтому рост идёт ступенями, а не сразу.</p>
+          <div class="steps">${reached ? "" :
+            `<div class="steps__ceiling"><span class="steps__ceiling-label">без ограничения — ${rub(c.next.taxFull)}</span></div>`}
+          <div class="steps__grid">${c.trajectory.map(p => `<div class="step">
+              <div class="step__amount">${rub(p.payable)}</div>
+              <div class="step__bar" style="height:${Number(p.payable * 100n / ceiling)}%"></div>
+              <div class="step__year">${p.year}${p.limited ? '<div class="step__capped">потолок</div>' : ""}</div>
+            </div>`).join("")}</div></div></div>`;
+      }
+    }
+
+    // --- исходные данные ---
+    const seg = SEGMENTS[parcel.segment];
+    html += `<h2>Как получились эти суммы</h2><div class="card"><table class="facts">
+      ${c.hasOld ? `<tr><th>Кадастровая стоимость, ГКО ${TOUR_OLD.year}</th><td>${kop(parcel.oldKop)}</td></tr>` : ""}
+      <tr><th>Кадастровая стоимость, ГКО ${TOUR_NEW.year}</th><td>${kop(parcel.newKop)}</td></tr>
+      ${c.areaC > 0n ? `<tr><th>Площадь участка</th><td>${areaText(c.areaC)}${parcel.areaC > 0n ? "" : " <small>— указана вами</small>"}</td></tr>` : ""}
+      ${seg ? `<tr><th>Оценочный сегмент, ГКО ${c.hasNew ? TOUR_NEW.year : TOUR_OLD.year}</th><td>${parcel.segment} <small>— ${esc(seg)}</small></td></tr>` : ""}
+      <tr><th>Группа ставки</th><td class="prose">${esc(GROUP_LABELS[c.rateNext.group])}</td></tr>
+      <tr><th>Применённая ставка</th><td>${rateText(c.rateNext.rateE4)} <small>— ${esc(c.rateNext.source)}</small></td></tr>
+      ${c.next.deduction > 0n ? `<tr><th>Вычет 600 кв.м</th><td>−${kop(c.next.deduction)}</td></tr>` : ""}
+      <tr><th>Налоговая база</th><td>${kop(c.next.base)}</td></tr>
+      ${c.rateNext.municipality && !/УТОЧНИТЬ/.test(c.rateNext.municipality)
+        ? `<tr><th>Муниципальное образование</th><td class="prose">${esc(c.rateNext.municipality)}</td></tr>` : ""}
+    </table>`;
+    if (c.rateNext.unknown) {
+      html += `<div class="notice notice--warn"><p><strong>В выгрузке не указан вид разрешённого использования.</strong>
+        Расчёт выполнен по ставке для прочих земель — это наибольшая возможная ставка.
+        Выберите вид использования в уточнениях ниже, чтобы получить точную сумму.</p></div>`;
+    } else if (/предельная/.test(c.rateNext.source)) {
+      html += `<div class="notice"><p>Фактическая ставка вашего муниципального образования в справочник не заведена, поэтому взята
+        предельная по Налоговому кодексу: расчёт даёт верхнюю оценку налога. Фактическая ставка может быть ниже —
+        например, в городе Саратове для садоводства и огородничества действует 0,1 %. Узнайте свою ставку
+        в сервисе ФНС и впишите её в уточнениях ниже.</p></div>`;
+    }
+    const segGroup = SEGMENT_GROUP[parcel.segment];
+    if (!state.options.group && segGroup && !c.rateNext.unknown && segGroup !== c.rateNext.group) {
+      html += `<div class="notice notice--warn"><p>Сведения двух туров расходятся: по данным ${TOUR_OLD.year} года участок относится к группе
+        «${esc(GROUP_LABELS[c.rateNext.group])}», а в туре ${TOUR_NEW.year} года он оценён в сегменте «${esc(seg)}».
+        Расчёт выполнен по сведениям ${TOUR_OLD.year} года. Если вид использования изменился, выберите его в уточнениях ниже.</p></div>`;
+    }
+    for (const note of c.next.notes) html += `<div class="notice"><p>${esc(note)}</p></div>`;
+    html += "</div>";
+
+    // --- уточнения ---
+    const o = state.options;
+    const opt = (v, label, cur) => `<option value="${v}"${cur === v ? " selected" : ""}>${label}</option>`;
+    html += `<h2>Уточнить расчёт</h2><div class="card"><form id="options-form" class="options" novalidate>
+      <div><label for="opt-group">Вид использования участка</label>
+        <select class="input" id="opt-group">
+          ${opt("", "Определить по данным оценки", o.group)}${opt("residential", "Жилой фонд, ИЖС", o.group)}
+          ${opt("garden", "ЛПХ, садоводство, огородничество", o.group)}
+          ${opt("agricultural", "Сельскохозяйственное использование", o.group)}
+          ${opt("general", "Прочие земельные участки", o.group)}
+        </select></div>
+      <div><label for="opt-rate">Своя ставка, %</label>
+        <input class="input input--small" id="opt-rate" type="text" inputmode="decimal" autocomplete="off"
+               placeholder="например, 0,1" value="${esc(o.customRate)}"></div>
+      <div><label for="opt-share">Доля в праве</label>
+        <select class="input" id="opt-share">
+          ${opt("1", "Участок целиком", o.share)}${opt("0.5", "1/2", o.share)}
+          ${opt("0.3333333333", "1/3", o.share)}${opt("0.25", "1/4", o.share)}
+        </select></div>
+      <div><label for="opt-months">Месяцев владения в году</label>
+        <select class="input" id="opt-months">
+          ${[12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(m => opt(String(m), String(m), String(o.months))).join("")}
+        </select></div>
+      ${parcel.areaC > 0n ? "" : `<div class="wide"><label for="opt-area">Площадь участка, кв.м</label>
+        <input class="input input--small" id="opt-area" type="text" inputmode="decimal" autocomplete="off"
+               placeholder="в выгрузке не указана; нужна только для вычета" value="${esc(o.area)}"></div>`}
+      <label class="check wide" for="opt-deduction">
+        <input type="checkbox" id="opt-deduction"${o.deduction ? " checked" : ""}>
+        <span>Имею право на вычет 600 кв.м
+          <small>Пенсионеры, предпенсионеры, инвалиды I и II групп, ветераны, многодетные родители и другие категории из пункта 5 статьи 391 НК РФ</small></span>
+      </label>
+      ${c.customInvalid ? '<div class="errors wide" style="margin:0">Ставка записывается числом, например 0,1 или 1,5.</div>' : ""}
+    </form></div>`;
+
+    // --- оспаривание ---
+    html += `<h2>Стоит ли оспаривать стоимость</h2><div class="card">`;
+    if (c.appeal) {
+      const a = c.appeal;
+      const netAbs = a.netKop < 0n ? -a.netKop : a.netKop;
+      let payback = "";
+      if (a.paybackTenths !== null) {
+        const whole = a.paybackTenths / 10n, frac = a.paybackTenths % 10n;
+        payback = frac ? `${whole},${frac} года` : `${whole} ${pluralYears(Number(whole % 100n))}`;
+      }
+      const horizon = `${a.horizon} ${pluralYears(a.horizon)}`;
+      const verdict = a.annual <= 0n
+        ? "Заявленная рыночная стоимость не ниже кадастровой, экономии на налоге не возникает."
+        : a.worthwhile
+          ? `Экономия превышает издержки: за ${horizon} разница составит ${rub(a.total)} при затратах ${rub(a.reportKop / 100n)}.`
+          : `Издержки превышают экономию: отчёт оценщика обойдётся в ${rub(a.reportKop / 100n)}, а экономия за ${horizon} составит ${rub(a.total)}.`;
+      html += `<p class="soft">Расчёт при рыночной стоимости ${rub(a.marketKop / 100n)} и стоимости отчёта оценщика ${rub(a.reportKop / 100n)}.</p>
+        <table class="facts">
+          <tr><th>Экономия на налоге за год</th><td>${rub(a.annual)}</td></tr>
+          <tr><th>Экономия за ${horizon} действия оценки</th><td>${rub(a.total)}</td></tr>
+          <tr><th>Затраты на отчёт оценщика</th><td>−${rub(a.reportKop / 100n)}</td></tr>
+          <tr><th>Итого</th><td class="${a.worthwhile ? "value--fall" : "value--rise"}">${a.netKop > 0n ? "+" : "−"}${rub(netAbs / 100n)}</td></tr>
+          ${payback ? `<tr><th>Срок окупаемости</th><td>${payback}</td></tr>` : ""}
+        </table>
+        <div class="notice ${a.worthwhile ? "" : "notice--warn"}"><p>${verdict}</p>
+          <p>Расчёт ориентировочный. Не учтены расходы на представителя, вероятность отказа и возможность пересмотра стоимости
+             по статье 21 — исправление ошибок в сведениях об объекте проводится бесплатно.</p></div>`;
+    } else {
+      html += `<p class="soft">Оспаривание требует отчёта независимого оценщика, и его стоимость может превысить экономию на налоге.
+        Укажите, сколько примерно стоит ваш участок, — сервис сопоставит экономию с затратами.</p>`;
+    }
+    html += `<form id="appeal-form" novalidate style="margin-top:1rem">
+        <label class="field" for="opt-market">Рыночная стоимость участка, ₽</label>
+        <input class="input input--small" id="opt-market" type="text" inputmode="decimal" autocomplete="off"
+               placeholder="например, 500 000" value="${esc(o.market)}">
+        <label class="field" for="opt-report" style="margin-top:0.9rem">Стоимость отчёта оценщика, ₽</label>
+        <input class="input input--small" id="opt-report" type="text" inputmode="decimal" autocomplete="off" value="${esc(o.report)}">
+        <button class="button" type="submit">Оценить целесообразность</button>
+      </form></div>`;
+
+    // --- куда обращаться ---
+    html += `<h2>Если вы считаете стоимость завышенной</h2><div class="card">
+      <p class="soft" style="margin-bottom:1.25rem">Кадастровая стоимость определяется массовым методом, без осмотра конкретного участка.
+        Если она заметно выше рыночной, её можно пересмотреть.</p>
+      <ul class="links">${linksHtml(LEGAL_LINKS)}</ul>
+      <p style="margin:1.25rem 0 0"><a class="more" href="#appeal">Порядок действий и сроки →</a></p></div>`;
+
+    body.innerHTML = html;
+    bindResult();
+  }
+
+  function bindResult() {
+    const o = state.options;
+    const rerender = focusId => {
+      const pos = focusId && $(focusId) ? $(focusId).selectionStart : null;
+      render();
+      if (focusId && $(focusId)) {
+        $(focusId).focus();
+        if (pos !== null) { try { $(focusId).setSelectionRange(pos, pos); } catch (e) {} }
+      }
+    };
+    const on = (id, event, fn) => { const el = $(id); if (el) el.addEventListener(event, fn); };
+    on("opt-group", "change", e => { o.group = e.target.value; rerender("opt-group"); });
+    on("opt-share", "change", e => { o.share = e.target.value; rerender("opt-share"); });
+    on("opt-months", "change", e => { o.months = Number(e.target.value); rerender("opt-months"); });
+    on("opt-deduction", "change", e => { o.deduction = e.target.checked; rerender("opt-deduction"); });
+    on("opt-rate", "change", e => { o.customRate = e.target.value.trim(); rerender("opt-rate"); });
+    on("opt-area", "change", e => { o.area = e.target.value.trim(); rerender("opt-area"); });
+    on("options-form", "submit", e => e.preventDefault());
+    on("appeal-form", "submit", e => {
+      e.preventDefault();
+      o.market = $("opt-market").value.trim();
+      o.report = $("opt-report").value.trim() || "20000";
+      rerender("opt-market");
+    });
+  }
+
+  // ---------- запуск ----------
+  $("appeal-links").innerHTML = LEGAL_LINKS.map(g =>
+    `<div class="card"><p class="eyebrow" style="margin-bottom:0.9rem">${esc(g.group)}</p><ul class="links">${linksHtml([g])}</ul></div>`).join("");
+
+  $("search-form").addEventListener("submit", e => { e.preventDefault(); search($("cadnum-input").value); });
+  for (const chip of document.querySelectorAll("[data-example]")) {
+    chip.addEventListener("click", () => { $("cadnum-input").value = chip.dataset.example; search(chip.dataset.example); });
+  }
+  const goHome = e => {
+    if (e) e.preventDefault();
+    state.number = null; state.parcel = null;
+    try { history.replaceState(null, "", location.pathname); } catch (err) {}
+    show("search");
+    $("cadnum-input").focus();
+  };
+  $("back-button").addEventListener("click", goHome);
+  $("home-link").addEventListener("click", goHome);
+  window.addEventListener("hashchange", route);
+
+  loadJson("data/meta.json").then(meta => {
+    if (!meta) return;
+    $("meta-parcels").textContent = groupDigits(String(meta.parcels));
+    $("meta-both").textContent = groupDigits(String(meta.both));
+  }).catch(() => {});
+
+  route();
+  let initial = null;
+  try { initial = new URLSearchParams(location.search).get("n"); } catch (e) {}
+  if (initial && location.hash !== "#appeal") { $("cadnum-input").value = initial; search(initial); }
+})();
+</script>
+</body>
+</html>
